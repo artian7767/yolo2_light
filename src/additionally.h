@@ -545,7 +545,8 @@ extern "C" {
         int bit_align;
 
         float *biases;
-        float *biases_quant;
+        float *biases
+			uant;
         //float *bias_updates;
 
         int quantized;

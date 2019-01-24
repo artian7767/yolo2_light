@@ -167,7 +167,7 @@ void test_detector_cpu(char **names, char *cfgfile, char *weightfile, char *file
     calculate_binary_weights(net);
     if (quantized) {
         printf("\n\n Quantinization! \n\n");
-        quantinization_and_get_multipliers(net);
+        quantinization_and_get_multipliers(net); //Quantization
     }
     clock_t time;
     char buff[256];
@@ -198,7 +198,8 @@ void test_detector_cpu(char **names, char *cfgfile, char *weightfile, char *file
         //network_predict(net, X);
 #ifdef GPU
         if (quantized) {
-            network_predict_gpu_cudnn_quantized(net, X);    // quantized works only with Yolo v2
+            network_predict_gpu_cudnn
+				uantized(net, X);    // quantized works only with Yolo v2
                                                             //nms = 0.2;
         }
         else {
