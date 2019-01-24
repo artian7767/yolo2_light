@@ -568,8 +568,7 @@ extern "C" {
         int bit_align;
 
         float *biases;
-        float *biases
-			uant;
+		float *biases_quant;
         //float *bias_updates;
 
         int quantized;
