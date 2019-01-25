@@ -5,14 +5,13 @@
 #include "pthread.h"
 
 #include "additionally.h"
-
+#include "http_stream.h"
 #ifdef OPENCV
 #include "opencv2/highgui/highgui_c.h"
 #include "opencv2/core/core_c.h"
 #include "opencv2/core/version.hpp"
-
 #ifndef CV_VERSION_EPOCH
-#include "opencv2/videoio/videoio.hpp"
+#include "opencv2/videoio/videoio_c.h"
 #define OPENCV_VERSION CVAUX_STR(CV_VERSION_MAJOR)""CVAUX_STR(CV_VERSION_MINOR)""CVAUX_STR(CV_VERSION_REVISION)
 #pragma comment(lib, "opencv_world" OPENCV_VERSION ".lib")
 #else
@@ -24,6 +23,7 @@
 
 #endif
 
+void draw_detections_cv_v3(IplImage* show_img, detection *dets, int num, float thresh, char **names, int classes, int ext_output);
 
 
 int get_stream_fps(CvCapture *cap, int cpp_video_capture)
@@ -50,7 +50,7 @@ void mean_arrays(float **a, int n, int els, float *avg)
 
 
 // get prediction boxes: yolov2_forward_network.c
-void get_region_boxes_cpu(layer l, int w, int h, float thresh, float **probs, box *boxes, int only_objectness, int *map);
+void get_region_boxes_cpu(layer *l, int w, int h, float thresh, float **probs, box *boxes, int only_objectness, int *map);
 
 typedef struct detection_with_class {
     detection det;
@@ -195,11 +195,11 @@ void test_detector_cpu(char **names, char *cfgfile, char *weightfile, char *file
     }
     //set_batch_network(&net, 1);                    // network.c
     srand(2222222);
-    yolov2_fuse_conv_batchnorm(net);
-    calculate_binary_weights(net);
+    yolov2_fuse_conv_batchnorm(&net);
+    calculate_binary_weights(&net);
     if (quantized) {
         printf("\n\n Quantinization! \n\n");
-        quantinization_and_get_multipliers(net); //Quantization
+        quantinization_and_get_multipliers(&net); //Quantization
     }
     clock_t time;
     char buff[256];
@@ -242,11 +242,11 @@ void test_detector_cpu(char **names, char *cfgfile, char *weightfile, char *file
         network_predict_opencl(net, X);
 #else
         if (quantized) {
-            network_predict_quantized(net, X);    // quantized works only with Yolo v2
+            network_predict_quantized(&net, X);    // quantized works only with Yolo v2
             nms = 0.2;
         }
         else {
-            network_predict_cpu(net, X);
+            network_predict_cpu(&net, X);
         }
 #endif
 #endif
@@ -636,11 +636,11 @@ static void *detect_in_thread(void *ptr)
     network_predict_opencl(net, X);
 #else
     if (demo_quantized) {
-		prediction=network_predict_quantized(net, X);    // quantized works only with Yolo v2
+		prediction=network_predict_quantized(&net, X);    // quantized works only with Yolo v2
         //nms = 0.2;
     }
     else {
-        network_predict_cpu(net, X);
+        network_predict_cpu(&net, X);
     }
 #endif
 #endif
@@ -663,8 +663,8 @@ static void *detect_in_thread(void *ptr)
         dets = get_network_boxes(&net, det_s.w, det_s.h, demo_thresh, demo_thresh, 0, 1, &nboxes, 0); // resized
                                                                                                       //if (nms) do_nms_obj(dets, nboxes, l.classes, nms);    // bad results
     if (nms) do_nms_sort(dets, nboxes, l.classes, nms);
-    draw_detections_cv_v3(det_img, dets, nboxes, demo_thresh, demo_names, demo_classes, ext_output);
-    free_detections(dets, nboxes);
+    //draw_detections_cv_v3(det_img, dets, nboxes, demo_thresh, demo_names, demo_classes, ext_output);
+    //free_detections(dets, nboxes);
 
     printf("\033[2J");
     printf("\033[1;1H");
@@ -709,12 +709,12 @@ void demo(char *cfgfile, char *weightfile, float thresh, int cam_index, const ch
         load_weights_upto_cpu(&net, weightfile, net.n);
     }
     //set_batch_network(&net, 1);
-    yolov2_fuse_conv_batchnorm(net);
-    calculate_binary_weights(net);
+    yolov2_fuse_conv_batchnorm(&net);
+    calculate_binary_weights(&net);
     if (quantized) {
         printf("\n\n Quantinization! \n\n");
         demo_quantized = 1;
-        quantinization_and_get_multipliers(net);
+        quantinization_and_get_multipliers(&net);
     }
     srand(2222222);
 
@@ -722,12 +722,13 @@ void demo(char *cfgfile, char *weightfile, float thresh, int cam_index, const ch
 		printf("video file: %s\n", filename);
 		//cpp_video_capture = 1;
 		cap = get_capture_video_stream(filename);
-		cap = cvCaptureFromFile(filename);
+		//cap = cvCaptureFromFile(filename);
 	}
 	else {
 		printf("Webcam index: %d\n", cam_index);
 		//cpp_video_capture = 1;
 		//cap = cvCaptureFromCAM(cam_index);
+		//cap = cvCreateCameraCapture(cam_index);
 		cap = get_capture_webcam(cam_index);
 	}
 
@@ -746,8 +747,8 @@ void demo(char *cfgfile, char *weightfile, float thresh, int cam_index, const ch
 	for (j = 0; j < FRAMES; ++j) images[j] = make_image(1, 1, 3);
 
     boxes = (box *)calloc(l.w*l.h*l.n, sizeof(box));
-    probs = (float **)calloc(l.w*l.h*l.n, sizeof(float *));
-    for (j = 0; j < l.w*l.h*l.n; ++j) probs[j] = (float *)calloc(l.classes, sizeof(float *));
+    probs = (float **)calloc(l.w*l.h*l.n, sizeof(float*));
+    for (j = 0; j < l.w*l.h*l.n; ++j) probs[j] = (float *)calloc(l.classes, sizeof(float*));
 
 	if (l.classes != demo_classes) {
 		printf("Parameters don't match: in cfg-file classes=%d, in data-file classes=%d \n", l.classes, demo_classes);
@@ -908,39 +909,36 @@ void run_detector(int argc, char **argv)
 
     int clear = 0;                // find_arg(argc, argv, "-clear");
 
-    char *obj_names = argv[3];    // char *datacfg = argv[3];
-    char *cfg = argv[4];
-    char *weights = (argc > 5) ? argv[5] : 0;
-    char *filename = (argc > 6) ? argv[6] : 0;
+    char *datacfg = argv[3];
+	char *cfg = argv[4];
+	char *weights = (argc > 5) ? argv[5] : 0;
+	if (weights)
+		if (strlen(weights) > 0)
+			if (weights[strlen(weights) - 1] == 0x0d) weights[strlen(weights) - 1] = 0;
+	char *filename = (argc > 6) ? argv[6] : 0;
+    
 
-    // load object names
-    char **names = calloc(10000, sizeof(char *));
-    int obj_count = 0;
-    FILE* fp;
-    char buffer[255];
-    fp = fopen(obj_names, "r");
-    while (fgets(buffer, 255, (FILE*)fp)) {
-        names[obj_count] = calloc(strlen(buffer)+1, sizeof(char));
-        strcpy(names[obj_count], buffer);
-        names[obj_count][strlen(buffer) - 1] = '\0'; //remove newline
-        ++obj_count;
-    }
-    fclose(fp);
-    int classes = obj_count;
-
-    if (0 == strcmp(argv[2], "test")) test_detector_cpu(names, cfg, weights, filename, thresh, quantized, dont_show);
+    if (0 == strcmp(argv[2], "test")) test_detector_cpu(datacfg, cfg, weights, filename, thresh, quantized, dont_show);
     //else if (0 == strcmp(argv[2], "train")) train_detector(datacfg, cfg, weights, gpus, ngpus, clear);
     //else if (0 == strcmp(argv[2], "valid")) validate_detector(datacfg, cfg, weights);
     //else if (0 == strcmp(argv[2], "recall")) validate_detector_recall(datacfg, cfg, weights);
-    else if (0 == strcmp(argv[2], "map")) validate_detector_map(obj_names, cfg, weights, thresh, quantized, iou_thresh);
-    else if (0 == strcmp(argv[2], "calibrate")) validate_calibrate_valid(obj_names, cfg, weights, input_calibration);
+    else if (0 == strcmp(argv[2], "map")) validate_detector_map(datacfg, cfg, weights, thresh, quantized, iou_thresh);
+    else if (0 == strcmp(argv[2], "calibrate")) validate_calibrate_valid(datacfg, cfg, weights, input_calibration);
     else if (0 == strcmp(argv[2], "demo")) {
+		list *options = read_data_cfg(datacfg);
+		int classes = option_find_int(options, "classes", 20);
+		char *name_list = option_find_str(options, "names", "data/names.list");
+		char **names = get_labels(name_list);
+		if (filename)
+			if (strlen(filename) > 0)
+				if (filename[strlen(filename) - 1] == 0x0d) filename[strlen(filename) - 1] = 0;
         demo(cfg, weights, thresh, cam_index, filename, names, classes, frame_skip, prefix, quantized, out_filename, dont_show);
-    }
-
-    int i;
-    for (i = 0; i < obj_count; ++i) free(names[i]);
-    free(names);
+		
+		free_list_contents_kvp(options);
+		free_list(options);
+	}
+	else printf(" There isn't such command: %s", argv[2]);
+	
 }
 
 

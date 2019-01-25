@@ -64,11 +64,11 @@ void im2col_cpu(float* data_im,
 // -------------- my own --------------
 
 // fuse convolutional and batch_norm weights into one convolutional-layer
-void yolov2_fuse_conv_batchnorm(network net)
+void yolov2_fuse_conv_batchnorm(network* net)
 {
     int j;
-    for (j = 0; j < net.n; ++j) {
-        layer *l = &net.layers[j];
+    for (j = 0; j < net->n; ++j) {
+        layer *l = &net->layers[j];
 
         if (l->type == CONVOLUTIONAL) {
             printf(" Fuse Convolutional layer \t\t l->size = %d  \n", l->size);
@@ -284,11 +284,11 @@ void binary_align_weights(convolutional_layer *l)
     free(align_weights);
 }
 
-void calculate_binary_weights(network net)
+void calculate_binary_weights(network *net)
 {
     int j;
-    for (j = 0; j < net.n; ++j) {
-        layer *l = &net.layers[j];
+    for (j = 0; j < net->n; ++j) {
+        layer *l = &net->layers[j];
 
         if (l->type == CONVOLUTIONAL) {
             //printf(" Merges Convolutional-%d and batch_norm \n", j);
@@ -299,7 +299,7 @@ void calculate_binary_weights(network net)
 
                 binary_align_weights(l);
 
-                if (net.layers[j].use_bin_output) {
+                if (net->layers[j].use_bin_output) {
                     l->activation = LINEAR;
                 }
             }
@@ -1979,6 +1979,16 @@ char **get_labels(char *filename)
     return labels;
 }
 
+void free_list_contents_kvp(list *l)
+{
+	node *n = l->front;
+	while (n) {
+		kvp *p = n->val;
+		free(p->key);
+		free(n->val);
+		n = n->next;
+	}
+}
 
 
 // -------------- network.c --------------
@@ -3182,12 +3192,7 @@ float get_color(int c, int x, int max)
 // -------------- option_list.c --------------------
 
 
-// option_list.c
-typedef struct {
-    char *key;
-    char *val;
-    int used;
-} kvp;
+
 
 
 // option_list.c
@@ -3247,6 +3252,8 @@ list *read_data_cfg(char *filename)
     fclose(file);
     return options;
 }
+
+
 
 // option_list.c
 void option_unused(list *l)
@@ -3318,6 +3325,7 @@ float option_find_float(list *l, char *key, float def)
     fprintf(stderr, "%s: Using default '%lf'\n", key, def);
     return def;
 }
+
 
 
 // -------------- parser.c --------------------
@@ -4471,9 +4479,9 @@ void validate_detector_map(char *datacfg, char *cfgfile, char *weightfile, float
         load_weights_upto_cpu(&net, weightfile, net.n);
     }
     //set_batch_network(&net, 1);
-    yolov2_fuse_conv_batchnorm(net);
-    calculate_binary_weights(net);
-    if (quantized) quantinization_and_get_multipliers(net);
+    yolov2_fuse_conv_batchnorm(&net);
+    calculate_binary_weights(&net);
+    if (quantized) quantinization_and_get_multipliers(&net);
     srand(time(0));
 
     list *plist = get_paths(valid_images);
@@ -4565,11 +4573,11 @@ void validate_detector_map(char *datacfg, char *cfgfile, char *weightfile, float
             network_predict_opencl(net, X);
 #else    // OPENCL
             if (quantized) {
-                network_predict_quantized(net, X);    // quantized
+                network_predict_quantized(&net, X);    // quantized
                 //nms = 0.2;
             }
             else {
-                network_predict_cpu(net, X);
+                network_predict_cpu(&net, X);
             }
 #endif    // OPENCL
 #endif    // GPU
@@ -4834,7 +4842,7 @@ void validate_calibrate_valid(char *datacfg, char *cfgfile, char *weightfile, in
         load_weights_upto_cpu(&net, weightfile, net.n);
     }
     //set_batch_network(&net, 1);
-    yolov2_fuse_conv_batchnorm(net);
+    yolov2_fuse_conv_batchnorm(&net);
     srand(time(0));
 
 #ifdef GPU
@@ -4911,7 +4919,7 @@ void validate_calibrate_valid(char *datacfg, char *cfgfile, char *weightfile, in
             //char *id = basecfg(path);
             float *X = val_resized[t].data;
 
-            network_calibrate_cpu(net, X);
+            network_calibrate_cpu(&net, X);
         }
     }
 }

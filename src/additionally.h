@@ -3,7 +3,7 @@
 #define ADDITIONALLY_H
 
 #include "box.h"
-
+#include "http_stream.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -29,6 +29,7 @@
 #endif
 
 #ifdef OPENCV
+
 #include <opencv2/core/fast_math.hpp>
 #include "opencv2/highgui/highgui_c.h"
 #include "opencv2/imgproc/imgproc_c.h"
@@ -40,6 +41,7 @@
 #include "opencv2/imgcodecs/imgcodecs_c.h"
 #include "opencv2/videoio/videoio_c.h"
 #endif
+
 
 #endif
 
@@ -182,7 +184,7 @@ extern "C" {
     void binary_align_weights(convolutional_layer *l);
 
     // float32 to bit-1 and align weights for ALL layers
-    void calculate_binary_weights(struct network net);
+    void calculate_binary_weights(struct network *net);
 
     // -------------- XNOR-net GPU ------------
 
@@ -316,6 +318,28 @@ extern "C" {
 
     // list.c
     char **get_labels(char *filename);
+
+
+	// ------------- option_list.h ----------
+
+	// option_list.h
+	typedef struct {
+		char *key;
+		char *val;
+		int used;
+	} kvp;
+
+	list *read_data_cfg(char *filename);
+	int read_option(char *s, list *options);
+	void option_insert(list *l, char *key, char *val);
+	char *option_find(list *l, char *key);
+	char *option_find_str(list *l, char *key, char *def);
+	int option_find_int(list *l, char *key, int def);
+	int option_find_int_quiet(list *l, char *key, int def);
+	float option_find_float(list *l, char *key, float def);
+	float option_find_float_quiet(list *l, char *key, float def);
+	void option_unused(list *l);
+
 
 
     // -------------- utils.h --------------
@@ -811,6 +835,8 @@ extern "C" {
     // network.c
     network make_network(int n);
 
+	void free_detections(detection *dets, int n);
+
 
     // network.c
 #ifdef GPU
@@ -858,7 +884,6 @@ extern "C" {
 
     // convolutional_layer.c
     convolutional_layer make_convolutional_layer(int batch, int h, int w, int c, int n, int size, int stride, int padding, ACTIVATION activation, int batch_normalize, int binary, int xnor, int adam, int quantized, int use_bin_output);
-
 
 
     // -------------- image.c --------------
@@ -938,27 +963,27 @@ extern "C" {
 
 
     // detect on CPU: yolov2_forward_network.c
-    float *network_predict_cpu(network net, float *input);
+    float *network_predict_cpu(network *net, float *input);
 
     // calculate mAP
     void validate_detector_map(char *datacfg, char *cfgfile, char *weightfile, float thresh_calc_avg_iou, int quantized, const float iou_thresh);
 
     // fuse convolutional and batch_norm weights into one convolutional-layer
-    void yolov2_fuse_conv_batchnorm(network net);
+    void yolov2_fuse_conv_batchnorm(network *net);
 
     // calibration input for int8 quantinization
-    float *network_calibrate_cpu(network net, float *input);
+    float *network_calibrate_cpu(network *net, float *input);
 
     // -------------- yolov2_forward_network_quantized.c --------------------
 
     // yolov2_forward_network.c - fp32 is used for 1st and last layers during INT8-quantized inference
-    void forward_convolutional_layer_cpu(layer l, network_state state);
+    void forward_convolutional_layer_cpu(layer *l, network_state *state);
 
     // quantizized
-    float *network_predict_quantized(network net, float *input);
+    float *network_predict_quantized(network* net, float *input);
 
     // Quantinization and get multiplers for convolutional weights for quantinization
-    void quantinization_and_get_multipliers(network net);
+    void quantinization_and_get_multipliers(network* net);
 
     // draw distribution of float values
     void draw_distribution(float *arr_ptr, int arr_size, char *name);
